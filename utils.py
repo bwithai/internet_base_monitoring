@@ -27,4 +27,30 @@ def handle_cd(command):
         else:
             return None
     except Exception as e:
-        return f"An error occurred: {e}"
+        return f"%-> {e}"
+
+
+def download_file(client_socket, filepath):
+    print("start reading")
+    try:
+        with open(filepath, 'rb') as file:
+            data = file.read(4096)
+            while data:
+                client_socket.sendall(data)
+                data = file.read(4096)
+
+    except FileNotFoundError:
+        client_socket.sendall(b'%-> Not found')
+
+
+def receive_file(conn, filename):
+    print("start receiving")
+    try:
+        with open(filename, 'wb') as file:
+            data = conn.recv(4096)
+            while data:
+                file.write(data)
+                data = conn.recv(4096)
+        print(f"Downloaded {filename} successfully.")
+    except Exception as e:
+        print(f"Error downloading {filename}: {str(e)}")
