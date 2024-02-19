@@ -1,5 +1,6 @@
 import paramiko
 
+# Specify the path where you want to save the private key
 key_path = "/home/bwithai/.ssh/01_id"
 
 # Generate an RSA key pair
