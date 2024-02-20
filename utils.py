@@ -31,26 +31,30 @@ def handle_cd(command):
 
 
 def download_file(client_socket, filepath):
-    print("start reading")
     try:
         with open(filepath, 'rb') as file:
-            data = file.read(4096)
-            while data:
-                client_socket.sendall(data)
-                data = file.read(4096)
-
+            data = file.read()
+            client_socket.sendall(data)
+            client_socket.send(b"<EOF>")
     except FileNotFoundError:
         client_socket.sendall(b'%-> Not found')
+        client_socket.send(b"<EOF>")
 
 
 def receive_file(conn, filename):
-    print("start receiving")
+    file_bytes = b""
+    done = False
     try:
-        with open(filename, 'wb') as file:
+        while not done:
             data = conn.recv(4096)
-            while data:
-                file.write(data)
-                data = conn.recv(4096)
+            if file_bytes[-5:] == b"<EOF>":
+                done = True
+            else:
+                file_bytes += data
+
+        with open(filename, 'wb') as file:
+            file.write(file_bytes[:-5])
+
         print(f"Downloaded {filename} successfully.")
     except Exception as e:
         print(f"Error downloading {filename}: {str(e)}")
