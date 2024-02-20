@@ -1,6 +1,11 @@
 import os
 
 
+# import tqdm
+#
+# progress = tqdm.tqdm(unit="B", unit_scale=True, unit_divisor=1000, total=)
+
+
 def is_cd_cmd(command):
     # Split the input into command and arguments
     command_args = command.split()
@@ -33,12 +38,14 @@ def handle_cd(command):
 def download_file(client_socket, filepath):
     try:
         with open(filepath, 'rb') as file:
-            data = file.read()
-            client_socket.sendall(data)
-            client_socket.send(b"<EOF>")
+            data = file.read(4096)
+            while data:
+                client_socket.sendall(data)
+                data = file.read(4096)
+            client_socket.sendall(b"<EOF>")
     except FileNotFoundError:
         client_socket.sendall(b'%-> Not found')
-        client_socket.send(b"<EOF>")
+        client_socket.sendall(b"<EOF>")
 
 
 def receive_file(conn, filename):
@@ -47,10 +54,9 @@ def receive_file(conn, filename):
     try:
         while not done:
             data = conn.recv(4096)
-            if file_bytes[-5:] == b"<EOF>":
+            file_bytes += data
+            if b"<EOF>" in file_bytes:
                 done = True
-            else:
-                file_bytes += data
 
         with open(filename, 'wb') as file:
             file.write(file_bytes[:-5])
