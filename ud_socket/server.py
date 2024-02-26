@@ -6,11 +6,12 @@ from utils import is_cd_cmd, receive_file
 
 def start_server():
     host = '127.0.0.1'
+    # host = "192.168.88.77"
     port = 12344
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
         server_socket.bind((host, port))
-        server_socket.listen()
+        server_socket.listen(5)
 
         print(f"Server listening on {host}:{port}")
 
@@ -36,6 +37,8 @@ def start_server():
                 conn.sendall(command.encode('utf-8'))
 
                 if command.lower() == 'exit':
+                    conn.close()
+                    server_socket.close()
                     break
 
                 # Receive and print the output from the client
