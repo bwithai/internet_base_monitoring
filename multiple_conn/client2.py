@@ -6,9 +6,9 @@ from utils import handle_cd, download_file
 
 
 def start_client():
-    host = '192.168.1.107'
-    # host = '192.168.1.110'
-    port = 12344
+    # host = '192.168.1.107'
+    host = "localhost"
+    port = 8000
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
         client_socket.connect((host, port))
