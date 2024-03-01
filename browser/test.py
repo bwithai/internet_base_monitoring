@@ -1,16 +1,16 @@
-from browser_history.browsers import Chrome, Firefox
+from browser_history.browsers import Chrome
 
-# Create an instance of the Chrome class
-chrome_instance = Chrome()
 
-# Fetch the browser history
-outputs = chrome_instance.fetch_history()
+b = Chrome()
 
-# Extract the list of (datetime.datetime, url) tuples
-history_entries = outputs.histories
+# this gives a list of all available profile names
+profiles_available = b.profiles(b.history_file)
+print(profiles_available)
 
-# Print the last 10 entries
-latest_then = history_entries[-10:-1]
+# use the history_profiles function to get histories
+# it needs a list of profile names to use
+outputs = b.history_path_profile("Profile 1")
 
-for i in latest_then:
-    print(i)
+his = outputs.histories
+
+print(his[-1])

