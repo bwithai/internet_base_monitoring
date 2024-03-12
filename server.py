@@ -1,7 +1,7 @@
 import asyncio
 
 from fastapi import FastAPI, WebSocket
-from fastapi.security import APIKeyHeader
+# from fastapi.security import APIKeyHeader
 from starlette.middleware.cors import CORSMiddleware
 from starlette.websockets import WebSocketDisconnect
 
@@ -22,10 +22,6 @@ app.add_middleware(
     allow_methods=['*'],
     allow_headers=['*'],
 )
-
-API_KEY = "admin"  # Replace this with your actual API key
-
-security = APIKeyHeader(name="X-API-Key", auto_error=True)
 
 # Store connected clients
 clients = {}  # {client_id: websocket}

@@ -11,9 +11,9 @@ from utils import handle_cd, download_file, maintain_client_status
 async def start_client():
     # host = '192.168.1.107'
     host = '127.0.0.1'
-    port = 8000
+    port = 8001
 
-    uri = "ws://localhost:8001/ws/client"
+    uri = "ws://127.0.0.1:8001/ws/client"
 
     while True:
         try:
