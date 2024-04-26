@@ -1,4 +1,41 @@
 import os
+import subprocess
+
+from datetime import datetime
+
+
+def today():
+    # Get the current date and time
+    current_datetime = datetime.now()
+
+    # Format the date and time in ISO 8601 format
+    iso_8601_format = current_datetime.isoformat()
+    return iso_8601_format
+
+
+def handle_ls(result):
+    response = modify_result(result.stdout)
+    return response
+
+
+def modify_result(ls_response):
+    response = ls_response.split('\n')
+    directory_list = []
+    file_list = []
+
+    for item in response:
+        if item:
+            if "." in item:
+                file_list.append(item)
+            else:
+                directory_list.append(item)
+
+    result_json = {
+        "directories": directory_list,
+        "files": file_list
+    }
+
+    return result_json
 
 
 async def is_client_admin(api_key: str):
@@ -39,7 +76,13 @@ def handle_cd(command):
             directory_path = ' '.join(command_args[1:])
             # Change the current working directory
             os.chdir(os.path.expanduser(directory_path))
-            return os.getcwd()
+            cwd = os.getcwd()
+
+            result = subprocess.run("ls", shell=True, capture_output=True, text=True)
+            response = handle_ls(result)
+            response['cwd'] = cwd
+            return response
+
         else:
             return None
     except Exception as e:

@@ -28,3 +28,16 @@ openssl genpkey -algorithm RSA -out server.key
 openssl req -new -key server.key -out server.csr -config server.cnf
 openssl x509 -req -in server.csr -signkey server.key -out server.crt -extensions v3_req -extfile server.cnf
 ```
+
+
+# 2nd Workable Approach For Remote Access
+```bash
+openssl req -x509 -newkey rsa:4096 -keyout server.key -out server.crt -days 365 -nodes
+openssl req -new -key server.key -out server.csr -config server.cnf
+openssl x509 -req -in server.csr -signkey server.key -out server.crt -extensions v3_req -extfile server.cnf
+```
+
+Create a PKCS#12 file: Combine the server certificate and private key into a PKCS#12 file (.pfx or .p12). You can do this using OpenSSL:
+```bash
+openssl pkcs12 -export -out server.pfx -inkey server.key -in server.crt
+```

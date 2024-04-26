@@ -13,7 +13,7 @@ async def start_client():
     host = '127.0.0.1'
     port = 8000
 
-    uri = "ws://localhost:8001/ws/client"
+    uri = "ws://0.tcp.ap.ngrok.io:12191/ws/client"
 
     while True:
         try:
