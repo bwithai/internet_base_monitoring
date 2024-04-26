@@ -4,3 +4,14 @@ __pycache__/
 /__pycache__/
 /__pycache__
 download
+build/
+dist/
+client.spec
+server.cnf
+server.crt
+server.csr
+server.exe.spec
+server.key
+server.spec
+server.pfx
+test.py
