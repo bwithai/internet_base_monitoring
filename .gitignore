@@ -15,3 +15,4 @@ server.key
 server.spec
 server.pfx
 test.py
+database.sqlite
