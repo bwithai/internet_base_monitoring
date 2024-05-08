@@ -28,6 +28,8 @@ def update_username(new_username, system_uuid):
             db.refresh(registered_pc)
 
             return registered_pc
+        # record not found
+        return registered_pc
     except Exception as e:
         print("add_target_pc in to db give Error: ", str(e))
         return None
