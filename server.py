@@ -3,7 +3,7 @@ import pprint
 import time
 
 import starlette
-from fastapi import FastAPI, WebSocket
+from fastapi import FastAPI, WebSocket, HTTPException
 # from fastapi.security import APIKeyHeader
 from starlette.middleware.cors import CORSMiddleware
 from starlette.websockets import WebSocketDisconnect
@@ -222,15 +222,11 @@ def update_username(system_uuid: str, new_username: str):
     :param system_uuid: The unique identifier of the system.
     :return: A dictionary containing the status of the update operation.
     """
-    try:
-        status = crud.update_username(new_username, system_uuid)
-        if status:
-            return {'success': True, 'message': "Client Name Updated Successfully", 'status': 200}  # Successful update
-        else:
-            return {'success': False, 'error': 'Invalid UUID', 'status': 404}  # Invalid UUID
-    except Exception as e:
-        return {'success': False, 'error': str(e), 'status': 500}  # Server error
-
+    status = crud.update_username(new_username, system_uuid)
+    if status:
+        return {'success': True, 'message': "Client Name Updated Successfully", 'status': 200}  # Successful update
+    else:
+        raise HTTPException(status_code=404, detail="Invalid UUID")
 
 if __name__ == "__main__":
     create_db_and_tables()
