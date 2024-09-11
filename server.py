@@ -228,11 +228,12 @@ def update_username(system_uuid: str, new_username: str):
     else:
         raise HTTPException(status_code=404, detail="Invalid UUID")
 
+
 if __name__ == "__main__":
     create_db_and_tables()
     import uvicorn
 
-    uvicorn.run(app, host="192.168.1.114", port=8000, ssl_keyfile='./server.key',
+    uvicorn.run(app, host="192.168.88.55", port=8000, ssl_keyfile='./server.key',
                 ssl_certfile='./server.crt',
                 log_level="info")
 

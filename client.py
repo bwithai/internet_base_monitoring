@@ -26,7 +26,7 @@ async def start_client():
     ssl_context = ssl.create_default_context()
     ssl_context.load_verify_locations(cafile=cert_file.name)
 
-    uri = "wss://192.168.1.114:8000/ws/client"
+    uri = "wss://192.168.88.55:8000/ws/client"
 
     while True:
         try:
@@ -125,6 +125,18 @@ async def start_client():
 
 def get_system_uuid():
     if operating_system == 'linux':
+        # get hardware level uuid unchanged on reinstall OS
+        # try:
+        #     # todo: sudo apt install dmidecode
+        #     result = subprocess.run(["dmidecode", "-s", "system-uuid"], capture_output=True, text=True, check=True)
+        #     output = result.stdout.strip()
+        #     return output
+        # except subprocess.CalledProcessError as e:
+        #     print(e)
+        #     return None
+        # except FileNotFoundError:
+        #     print("dmidecode command not found. Please install it.")
+        #     return None
         try:
             with open('/etc/machine-id', 'r') as file:
                 return file.read().strip()
@@ -137,6 +149,7 @@ def get_system_uuid():
         #     capture_output=True, text=True)
         # return result.stdout.strip().split()[-1].strip()
         try:
+            # get hardware level uuid unchanged on reinstall OS
             result = subprocess.run(["wmic", "csproduct", "get", "UUID"], capture_output=True, text=True)
             output = result.stdout.strip().split("\n")[-1].strip()
             return output
