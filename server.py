@@ -58,6 +58,7 @@ async def handle_client_interaction(client_websocket: WebSocket, admin_websocket
     try:
         while True:
             if first_time:
+                # Send auto wake-up message
                 await client_websocket.send_text("1")
                 first_time = False
                 continue

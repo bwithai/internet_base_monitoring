@@ -1,5 +1,3 @@
-from datetime import datetime
-
 from sqlmodel import select, desc, extract, func, or_
 from .db import Session, get_db
 from . import models
@@ -39,6 +37,10 @@ def update_username(new_username, system_uuid):
 
 
 def add_target_pc(detected_pc_data):
+    """
+    :param detected_pc_data: contain who is login on that pc and its system uuid
+    :return: stored registered_pc
+    """
     db: Session = get_db()
 
     try:

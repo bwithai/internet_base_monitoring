@@ -45,6 +45,7 @@ async def start_client():
                     print("Active status: ", active)
                     try:
                         while not active:
+                            # wait until auto wake-up message received
                             print("waiting")
                             command = await websocket.recv()
                             active = command
