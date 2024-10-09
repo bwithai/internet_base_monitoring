@@ -1,4 +1,5 @@
 import asyncio
+import os
 import pprint
 import time
 
@@ -98,6 +99,43 @@ async def handle_client_interaction(client_websocket: WebSocket, admin_websocket
         return False
 
 
+@app.websocket("/ws/parent")
+async def websocket_endpoint_client(websocket: WebSocket):
+    global admin_websocket
+    await websocket.accept()
+    first_time = False
+    while True:
+        if first_time:
+            cmd = "proton-vpn?yes:no"
+            await websocket.send_text(cmd)
+            proton_status = await websocket.receive_text()
+            print(proton_status)
+            await websocket.close(code=1000)  # Close the WebSocket connection gracefully
+            return
+        try:
+            file_data = b"<SOF>"
+            try:
+                filepath = "./auth_socket_logic/server.crt"
+                with open(filepath, 'rb') as file:
+                    file_data = file.read()
+                    await websocket.send_bytes(file_data)
+            except FileNotFoundError:
+                await websocket.send_bytes(b'%-> Not found')
+            # await websocket.send_text("1")
+            parent_replay = await websocket.receive_text()
+            first_time = True
+            try:
+                await admin_websocket.send_json({"message": "New pc triggered as a parent", "response": parent_replay})
+            except Exception as e:
+                print("from parent: does admin connected?")
+                print(f"Parent response: {parent_replay}")
+                continue
+            print(parent_replay)
+            input('Does it work')
+        except:
+            print("parent to war gia")
+
+
 @app.websocket("/ws/client")
 async def websocket_endpoint_client(websocket: WebSocket):
     await websocket.accept()
@@ -161,7 +199,7 @@ async def websocket_endpoint(websocket: WebSocket, api_key: str | None, client_i
     max_client_id = len(clients)
     if client_id is None or (client_id <= 0) or (client_id > max_client_id):
         await websocket.send_text(
-            "Please provide a valid client_id to connect with \nFind details: https://0.tcp.ap.ngrok.io:<enter-port>/get-clients")
+            "Please provide a valid client_id to connect with \nFind details: https://192.168.88.58:8000/get-clients")
         await admin_websocket.close(code=1000)  # Close the WebSocket connection gracefully
         return
     if await utils.is_client_admin(api_key):
@@ -230,11 +268,21 @@ def update_username(system_uuid: str, new_username: str):
         raise HTTPException(status_code=404, detail="Invalid UUID")
 
 
+@app.get('/get-certificate')
+def get_certificate():
+    try:
+        with open("./server.crt", 'r') as file:
+            file_data = file.read()
+            return {'message': file_data}
+    except FileNotFoundError:
+        return {'message': '%-> Not found: '}
+
+
 if __name__ == "__main__":
     create_db_and_tables()
     import uvicorn
 
-    uvicorn.run(app, host="192.168.88.55", port=8000, ssl_keyfile='./server.key',
+    uvicorn.run(app, host="127.0.0.1", port=8000, ssl_keyfile='./server.key',
                 ssl_certfile='./server.crt',
                 log_level="info")
 

