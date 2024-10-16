@@ -16,6 +16,7 @@ subjectAltName = @alt_names
 [alt_names]
 IP.1 = 127.0.0.1
 IP.2 = 192.168.88.55
-IP.2 = 192.168.88.58
+IP.3 = 192.168.88.58
+IP.4 = 192.168.88.70
 DNS.1 = 0.tcp.ap.ngrok.io
 DNS.2 = 0.tcp.au.ngrok.io

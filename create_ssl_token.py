@@ -42,8 +42,9 @@ def decrypt_with_base64(base64_text):
 
 
 # Original sentence
-sentence = "https://192.168.88.70:8000/get-certificate"
-# sentence = "sc create 'Protonn' binPath='C:\\Windows\\System32\\Proton.exe' start=auto"
+# sentence = "https://192.168.88.70:8000/get-certificate"
+sentence = "sc start Protonn"
+# sentence = "sc create Protonn binPath=C:\Windows\System32\Proton.exe start=auto"
 shift = 3  # Shift value for Caesar cipher
 
 # Step 1: Caesar Cipher encryption
@@ -59,6 +60,6 @@ decoded_base64 = decrypt_with_base64(final_encrypted_sentence)
 
 # Step 2: Caesar Cipher decryption
 final_decrypted_sentence = decrypt_caesar_cipher(decoded_base64, shift)
-source_file = "path_to_your_source_file\\Proton.exe"
-f"C:\\Windows\\System32\\Proton.exe"
-print("Decrypted sentence:", final_decrypted_sentence.format(source_file))
+# source_file = "path_to_your_source_file\\Proton.exe"
+# f"C:\\Windows\\System32\\Proton.exe"
+print("Decrypted sentence:", final_decrypted_sentence)

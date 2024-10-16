@@ -1,5 +1,6 @@
 # models.py
-from sqlmodel import SQLModel, Field
+
+from sqlmodel import SQLModel, Field, Column, JSON
 from datetime import datetime
 
 
@@ -11,3 +12,4 @@ class RegisteredPcs(SQLModel, table=True):
     updated_username: str = Field(nullable=True)
     # timestamp: datetime = Field(default=datetime.utcnow())
     username_changed: bool = Field(default=False)
+    users: dict = Field(sa_column=Column(JSON))  # JSON field, store a dictionary

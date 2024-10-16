@@ -6,6 +6,7 @@ __pycache__/
 download
 build/
 dist/
+chield
 client.spec
 server.crt
 server.csr
@@ -16,3 +17,5 @@ ihms-server.pfx
 test.py
 database.sqlite
 exeptions.py
+try.py
+server.pfx

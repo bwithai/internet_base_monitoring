@@ -38,14 +38,15 @@ def update_username(new_username, system_uuid):
 
 def add_target_pc(detected_pc_data):
     """
-    :param detected_pc_data: contain who is login on that pc and its system uuid
-    :return: stored registered_pc
+    :param detected_pc_data: contains information about who is logged in on that PC and its system UUID
+    :return: stored or updated registered_pc
     """
     db: Session = get_db()
 
     try:
         system_uuid = detected_pc_data["system_uuid"]
         username = detected_pc_data["username"]
+        users = detected_pc_data['users']
 
         # Check if the record exists
         registered_pc: models.RegisteredPcs = get_registered_pc_by_sys_uuid(db=db, system_uuid=system_uuid)
@@ -54,17 +55,25 @@ def add_target_pc(detected_pc_data):
             # If the record doesn't exist, create a new one
             registered_pc = models.RegisteredPcs(
                 System_UUID=system_uuid,
-                username=username
+                username=username,
+                users=users
             )
             db.add(registered_pc)
-            db.commit()
-            db.refresh(registered_pc)
-            return registered_pc
         else:
-            return registered_pc
+            # Update the existing record
+            if registered_pc.users == users:
+                pass
+            else:
+                registered_pc.users = users  # Update users
+                db.add(registered_pc)  # You can use `merge` or `add`, depending on the situation
+
+        db.commit()
+        db.refresh(registered_pc)
+        return registered_pc
 
     except Exception as e:
-        print("add_target_pc in to db give Error: ", str(e))
+        print("add_target_pc to db gave Error: ", str(e))
+        db.rollback()
 
     finally:
         db.close()

